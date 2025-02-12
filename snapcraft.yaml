@@ -136,10 +136,19 @@ parts:
     plugin: nil
     build-packages:
       - wget
-    override-pull: wget -O rustup.sh https://sh.rustup.rs
-    override-build: |
+    override-pull: |
+      # Do not use rustup to work around https://forum.snapcraft.io/t/armhf-builds-on-launchpad-timing-out/31008
       REQUIRED_RUST_VERSION=1.76.0
-      sh rustup.sh -q -y --default-toolchain $REQUIRED_RUST_VERSION
+      ROOT=https://static.rust-lang.org/dist/rust-$REQUIRED_RUST_VERSION
+      if [ $CRAFT_ARCH_BUILD_FOR = "amd64" ]; then
+        BINARIES_SUFFIX=x86_64-unknown-linux-gnu
+      elif [ $CRAFT_ARCH_BUILD_FOR = "armhf" ]; then
+        BINARIES_SUFFIX=armv7-unknown-linux-gnueabihf
+      elif [ $CRAFT_ARCH_BUILD_FOR = "arm64" ]; then
+        BINARIES_SUFFIX=aarch64-unknown-linux-gnu
+      fi
+      wget -O - $ROOT-$BINARIES_SUFFIX.tar.gz | tar -x -z --strip-components=1
+      ./install.sh --prefix=/usr --destdir=$CRAFT_STAGE
     override-prime: ''
 
   cbindgen:
@@ -148,7 +157,7 @@ parts:
       - rust
     override-build: |
       craftctl default
-      $HOME/.cargo/bin/cargo install cbindgen
+      $CRAFT_STAGE/usr/bin/cargo install cbindgen
     override-prime: ''
 
   clang:
@@ -220,7 +229,7 @@ parts:
     override-build: |
       craftctl default
       if [ $CRAFT_ARCH_BUILD_FOR = "amd64" ] || [ $CRAFT_ARCH_BUILD_FOR = "arm64" ]; then
-        $HOME/.cargo/bin/cargo build --release
+        $CRAFT_STAGE/usr/bin/cargo build --release
         mkdir -p $CRAFT_STAGE/usr/bin/
         cp target/release/dump_syms $CRAFT_STAGE/usr/bin/
       fi
@@ -391,7 +400,7 @@ parts:
       echo "ac_add_options --prefix=$CRAFT_PART_INSTALL/usr" >> $MOZCONFIG
     override-build: |
       craftctl default
-      export PATH=$HOME/.cargo/bin:$PATH
+      export PATH=$CRAFT_STAGE/usr/bin/:$PATH
       GNOME_SDK_SNAP=/snap/gnome-46-2404-sdk/current
       if [ $CRAFT_ARCH_BUILD_FOR = "amd64" ]; then
         # "clang -dumpmachine" returns "x86_64-unknown-linux-gnu" on
